@@ -341,15 +341,69 @@ function RegisterScreen({ navigation }) {
     </KeyboardAvoidingView>
   );
 }
-
+// RecommendationBar for HomeScreen
+const RecommendationBar = ({ events, onCategory, onSort, selectedCategory, selectedSort }) => {
+  const { theme } = useTheme();
+  // Unique categories from events
+  const categories = Array.from(new Set(events.map(e => e.category))).filter(Boolean);
+  const sorts = [
+    { label: 'Newest', value: 'Newest' },
+    { label: 'Alphabetical', value: 'Alphabetical' }
+  ];
+  return (
+    <View style={styles.recommendationBar}>
+      <Text style={[styles.recommendationBarTitle, { color: theme.colors.text }]}>Recommended: </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'center' }}>
+        {['All', ...categories].map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[
+              styles.recommendationBtn,
+              {
+                backgroundColor: selectedCategory === cat ? theme.colors.primary : theme.colors.surface,
+                borderColor: theme.colors.primary,
+              }
+            ]}
+            onPress={() => onCategory(cat)}
+          >
+            <Text style={[
+              styles.recommendationBtnText,
+              { color: selectedCategory === cat ? 'white' : theme.colors.primary }
+            ]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
+        {sorts.map(sort => (
+          <TouchableOpacity
+            key={sort.value}
+            style={[
+              styles.recommendationBtn,
+              {
+                backgroundColor: selectedSort === sort.value ? theme.colors.accent : theme.colors.surface,
+                borderColor: theme.colors.accent,
+              }
+            ]}
+            onPress={() => onSort(sort.value)}
+          >
+            <Text style={[
+              styles.recommendationBtnText,
+              { color: selectedSort === sort.value ? 'white' : theme.colors.accent }
+            ]}>{sort.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
 function HomeScreen({ navigation }) {
   const [events, setEvents] = useState([]); 
   const [search, setSearch] = useState(''); 
   const [category, setCategory] = useState('All'); 
   const [sort, setSort] = useState('Newest'); 
+  const [registeredEventIds, setRegisteredEventIds] = useState([]);
   const { theme } = useTheme(); 
   const [loading, setLoading] = useState(true);
 
+  // Fetch events and user registrations
   useEffect(() => { 
     const fetchEvents = async () => {
       try {
@@ -366,8 +420,33 @@ function HomeScreen({ navigation }) {
       }
     };
     fetchEvents();
+
+    // Fetch registered event IDs for this user
+    const fetchRegistered = async () => {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const regKeys = allKeys.filter(key => key.startsWith('reg_'));
+      setRegisteredEventIds(regKeys.map(key => key.replace('reg_', '')));
+    };
+    fetchRegistered();
   }, []);
 
+  // Find the category the user registers for the most
+  const registeredEvents = events.filter(e => registeredEventIds.includes(e.id.toString()));
+  const categoryFrequency = {};
+  registeredEvents.forEach(ev => {
+    if (ev.category) {
+      categoryFrequency[ev.category] = (categoryFrequency[ev.category] || 0) + 1;
+    }
+  });
+  const sortedCategories = Object.entries(categoryFrequency).sort((a, b) => b[1] - a[1]);
+  const mostFrequentCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : null;
+
+  // Recommended events: upcoming events from user's top category that they haven't registered yet
+  const recommendedEvents = events.filter(
+    e => mostFrequentCategory && e.category === mostFrequentCategory && !registeredEventIds.includes(e.id.toString())
+  ).slice(0, 5); // show max 5 recommendations
+
+  // Current filters as before
   const filtered = events
     .filter(e => (category === 'All' || e.category === category) && 
       (e.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -385,7 +464,6 @@ function HomeScreen({ navigation }) {
           <Icon name="settings" size={24} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
-      
       <View style={[styles.filtersContainer, { backgroundColor: theme.colors.surface }]}>
         <CustomInput 
           placeholder="Search events..." 
@@ -394,6 +472,41 @@ function HomeScreen({ navigation }) {
           icon="search" 
           style={{ marginBottom: 12 }} 
         />
+        {/* RecommendationBar for quick filter chips remains */}
+        <RecommendationBar
+          events={events}
+          currentCategory={category}
+          currentSort={sort}
+          onCategoryPress={setCategory}
+          onSortPress={setSort}
+        />
+        {/* Personalized Recommendations */}
+        {mostFrequentCategory && recommendedEvents.length > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{
+              fontWeight: 'bold',
+              fontSize: 16,
+              marginBottom: 8,
+              color: theme.colors.text
+            }}>
+              Recommended for you ({mostFrequentCategory})
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 8}}>
+              {recommendedEvents.map(ev => (
+                <TouchableOpacity key={ev.id} onPress={() => navigation.navigate('Details', { event: ev })}>
+                  <AnimatedCard style={{ width: 170, marginRight: 12, padding: 0 }}>
+                    <Image source={{ uri: ev.image }} style={{ width: 170, height: 90, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
+                    <View style={{ padding: 10 }}>
+                      <Text style={{ fontWeight: 'bold', color: theme.colors.text, fontSize: 14 }} numberOfLines={2}>{ev.name}</Text>
+                      <Text style={{ color: theme.colors.border, fontSize: 12 }} numberOfLines={1}>{ev.venue}</Text>
+                      <Text style={{ color: theme.colors.border, fontSize: 12 }}>{new Date(ev.time).toLocaleDateString()}</Text>
+                    </View>
+                  </AnimatedCard>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
         <View style={styles.filtersRow}>
           <View style={[styles.pickerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <CustomPicker selectedValue={category} onValueChange={setCategory}>
@@ -412,7 +525,6 @@ function HomeScreen({ navigation }) {
           </View>
         </View>
       </View>
-      
       {loading ? (
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading events...</Text>
@@ -473,7 +585,6 @@ function HomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
 function RegisteredEventsScreen({ navigation }) {
   const [events, setEvents] = useState([]);
   const [registeredEvents, setRegisteredEvents] = useState([]);
@@ -1354,9 +1465,12 @@ function AppStack() {
 }
 
 // Styles
+// ...all your imports and code above remain unchanged...
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#fff' },
   headerGrad: {
+    width: '100%',
     height: height * 0.25,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1366,16 +1480,16 @@ const styles = StyleSheet.create({
   logoContainer: { alignItems: 'center' },
   appTitle: { fontSize: 28, fontWeight: 'bold', color: 'white', marginTop: 10 },
   appSubtitle: { fontSize: 14, color: 'white', opacity: 0.8 },
-  formContainer: { flex: 1, paddingHorizontal: 20, marginTop: -30 },
-  registerFormContainer: { paddingHorizontal: 20, paddingBottom: 20 },
-  loginCard: { padding: 25, borderRadius: 15, marginBottom: 20 },
+  formContainer: { flex: 1, paddingHorizontal: 20, marginTop: -30, width: '100%' },
+  registerFormContainer: { paddingHorizontal: 20, paddingBottom: 20, width: '100%', flexGrow: 1 },
+  loginCard: { padding: 25, borderRadius: 15, marginBottom: 20, width: '100%' },
   formTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 5 },
   formSubtitle: { fontSize: 14, marginBottom: 20 },
-  inputCont: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 15, height: 50 },
+  inputCont: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 15, height: 50, width: '100%' },
   inputIcon: { marginRight: 10 },
   textInput: { flex: 1, height: '100%', fontSize: 16 },
-  gradBtn: { borderRadius: 10, overflow: 'hidden', height: 50 },
-  gradBtnInner: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  gradBtn: { borderRadius: 10, overflow: 'hidden', height: 50, width: '100%' },
+  gradBtnInner: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   gradBtnTxt: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   disBtn: { opacity: 0.7 },
   linkButton: { alignSelf: 'center' },
@@ -1390,6 +1504,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 1,
+    width: '100%',
+    minWidth: 0,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -1397,25 +1513,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
+    width: '100%',
   },
   headerTitle: { fontSize: 20, fontWeight: 'bold' },
-  filtersContainer: { padding: 16, borderBottomWidth: 1 },
-  filtersRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  filtersContainer: { width: '100%', padding: 16, borderBottomWidth: 1 },
+  filtersRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
   pickerContainer: { width: '48%', borderRadius: 8, borderWidth: 1 },
   pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8 },
   pickerTxt: { fontSize: 14 },
   modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalContent: { marginHorizontal: 20, borderRadius: 12, maxHeight: height * 0.6 },
+  modalContent: { marginHorizontal: 20, borderRadius: 12, maxHeight: height * 0.6, width: '90%', alignSelf: 'center' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', padding: 16, borderBottomWidth: 1 },
   modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   modalItemTxt: { fontSize: 16 },
   modalClose: { padding: 16, borderRadius: 8, margin: 16, alignItems: 'center' },
   modalCloseTxt: { color: 'white', fontWeight: 'bold' },
-  eventCard: { flexDirection: 'row', marginBottom: 16 },
+  eventCard: { flexDirection: 'row', marginBottom: 16, minHeight: 110, width: '100%' },
   eventImage: { width: 100, height: 100, borderRadius: 8 },
-  eventContent: { flex: 1, marginLeft: 12 },
+  eventContent: { flex: 1, marginLeft: 12, minWidth: 0 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  eventTitle: { fontSize: 16, fontWeight: 'bold', flex: 1 },
+  eventTitle: { fontSize: 16, fontWeight: 'bold', flex: 1, minWidth: 0 },
   categoryBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginLeft: 8, alignSelf: 'flex-start' },
   categoryText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
   eventDetails: { marginBottom: 8 },
@@ -1423,41 +1540,41 @@ const styles = StyleSheet.create({
   eventTime: { fontSize: 12, marginLeft: 4 },
   eventVenue: { fontSize: 12, marginLeft: 4 },
   eventDescription: { fontSize: 13, lineHeight: 18 },
-  eventsList: { padding: 16 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40 },
+  eventsList: { padding: 16, paddingBottom: 30, flexGrow: 1, width: '100%' },
+  emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40, width: '100%' },
   emptyStateTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 16, textAlign: 'center' },
   emptyStateSubtitle: { fontSize: 14, marginTop: 8, textAlign: 'center' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' },
   loadingText: { fontSize: 16 },
-  profileContainer: { padding: 16 },
-  profileCard: { marginBottom: 16 },
+  profileContainer: { padding: 16, width: '100%', flexGrow: 1 },
+  profileCard: { marginBottom: 16, width: '100%' },
   profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   profileAvatar: { width: 80, height: 80, borderRadius: 40, marginRight: 16 },
-  profileInfo: { flex: 1 },
+  profileInfo: { flex: 1, minWidth: 0 },
   profileName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
   profileEmail: { fontSize: 14 },
   profileDetails: { marginBottom: 20 },
   detailItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
   detailLabel: { fontSize: 14, marginLeft: 12, marginRight: 8 },
   detailValue: { fontSize: 14, fontWeight: 'bold', flex: 1, textAlign: 'right' },
-  profileActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  profileActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
   profileActionBtn: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, width: '48%' },
   profileActionText: { fontSize: 14, fontWeight: 'bold', marginLeft: 8 },
-  statsCard: { padding: 16 },
+  statsCard: { padding: 16, width: '100%' },
   statsTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%' },
   statItem: { width: '48%', borderRadius: 8, padding: 16, marginBottom: 16, alignItems: 'center' },
   statValue: { fontSize: 24, fontWeight: 'bold', marginVertical: 8 },
   statLabel: { fontSize: 12 },
-  notificationCard: { padding: 16, marginBottom: 12 },
+  notificationCard: { padding: 16, marginBottom: 12, width: '100%' },
   notificationHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   notificationTitle: { fontSize: 16, fontWeight: 'bold', flex: 1 },
   notificationTime: { fontSize: 12 },
   notificationMessage: { fontSize: 14, lineHeight: 20 },
-  notificationsList: { padding: 16 },
+  notificationsList: { padding: 16, width: '100%' },
   detailsEventImage: { width: '100%', height: 200 },
-  detailsContent: { padding: 16 },
-  detailsCard: { marginBottom: 16 },
+  detailsContent: { padding: 16, width: '100%' },
+  detailsCard: { marginBottom: 16, width: '100%' },
   detailsTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 16 },
   detailsInfo: { marginBottom: 16 },
   detailsInfoItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -1470,44 +1587,111 @@ const styles = StyleSheet.create({
   speakerInfo: { flex: 1, justifyContent: 'center' },
   speakerName: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   speakerBio: { fontSize: 12 },
-  actionButtons: { marginBottom: 20 },
-  qrCodeContainer: { alignItems: 'center', marginTop: 20 },
+  actionButtons: { marginBottom: 20, width: '100%' },
+  qrCodeContainer: { alignItems: 'center', marginTop: 20, width: '100%' },
   qrCodeTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
-  qrCodeCard: { padding: 20, borderRadius: 12, alignItems: 'center' },
+  qrCodeCard: { padding: 20, borderRadius: 12, alignItems: 'center', width: 240, alignSelf: 'center' },
   qrCodeText: { fontSize: 16, fontWeight: 'bold', marginTop: 12 },
   qrCodeSubtext: { fontSize: 12, marginTop: 4 },
-  feedbackContainer: { padding: 16 },
-  feedbackCard: { padding: 20 },
+  feedbackContainer: { padding: 16, width: '100%', flexGrow: 1 },
+  feedbackCard: { padding: 20, width: '100%' },
   feedbackTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  ratingContainer: { alignItems: 'center', marginBottom: 20 },
+  ratingContainer: { alignItems: 'center', marginBottom: 20, width: '100%' },
   ratingText: { fontSize: 14, marginTop: 8 },
   feedbackLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  feedbackInput: { height: 120, borderWidth: 1, borderRadius: 8, padding: 12, textAlignVertical: 'top' },
-  settingsContainer: { padding: 16 },
-  settingsCard: { marginBottom: 16 },
+  feedbackInput: { height: 120, borderWidth: 1, borderRadius: 8, padding: 12, textAlignVertical: 'top', width: '100%' },
+  settingsContainer: { padding: 16, width: '100%', flexGrow: 1 },
+  settingsCard: { marginBottom: 16, width: '100%' },
   settingsSectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
-  settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+  settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, width: '100%' },
   settingText: { flexDirection: 'row', alignItems: 'center' },
   settingLabel: { fontSize: 16, marginLeft: 12 },
   settingValue: { fontSize: 14 },
-  // New styles for image upload
   avatarContainer: {
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: 20,
+    width: '100%',
   },
   uploadButton: {
     marginTop: 10,
     padding: 10,
     borderRadius: 5,
-    alignItems: 'center'
+    alignItems: 'center',
+    width: 120,
   },
   uploadButtonText: {
     color: 'white',
     fontWeight: 'bold'
-  }
+  },
+  recommendationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    width: '100%',
+  },
+  recommendationBarTitle: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    marginRight: 5
+  },
+  recommendationBtn: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  recommendationBtnText: {
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  recommendationSection: {
+    marginBottom: 10,
+    width: '100%',
+  },
+  recommendationSectionTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  recommendationCard: {
+    width: 170,
+    padding: 0,
+    marginRight: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  recommendationImage: {
+    width: 170,
+    height: 90,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  recommendationCardContent: {
+    padding: 10,
+  },
+  recommendationCardTitle: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  recommendationCardVenue: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  recommendationCardDate: {
+    color: '#aaa',
+    fontSize: 12,
+  },
 });
 
-// Main App Component
 export default function App() {
   return (
     <ThemeProvider>
