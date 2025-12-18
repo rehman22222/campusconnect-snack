@@ -9,10 +9,18 @@ import QRCode from 'react-native-qrcode-svg';
 import StarRating from 'react-native-star-rating-widget';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import * as ImagePicker from 'expo-image-picker'; // Add this import
-
+import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
+
+// Responsive scaling functions
+const scale = (size) => (width / 375) * size;
+const verticalScale = (size) => (height / 812) * size;
+const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
+
+const isSmallScreen = width < 375;
+const isLargeScreen = width > 768;
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 const EVENTS_API = 'https://682a4023ab2b5004cb3646ee.mockapi.io/events';
@@ -71,17 +79,19 @@ const CustomPicker = ({ selectedValue, onValueChange, children, style }) => {
   const selectedItem = items.find(item => item.value === selectedValue);
 
   return (
-    <View>
+    <View style={{ width: '100%' }}>
       <TouchableOpacity 
         style={[styles.pickerBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }, style]} 
         onPress={() => setModalVisible(true)}
       >
-        <Text style={[styles.pickerTxt, { color: theme.colors.text }]}>{selectedItem ? selectedItem.label : 'Select...'}</Text>
-        <Icon name="arrow-drop-down" size={20} color={theme.colors.text} />
+        <Text style={[styles.pickerTxt, { color: theme.colors.text }]} numberOfLines={1}>
+          {selectedItem ? selectedItem.label : 'Select...'}
+        </Text>
+        <Icon name="arrow-drop-down" size={moderateScale(20)} color={theme.colors.text} />
       </TouchableOpacity>
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card, maxHeight: height * 0.7 }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select Option</Text>
             <FlatList 
               data={items} 
@@ -98,7 +108,7 @@ const CustomPicker = ({ selectedValue, onValueChange, children, style }) => {
                   onPress={() => { onValueChange(item.value); setModalVisible(false); }}
                 >
                   <Text style={[styles.modalItemTxt, { color: theme.colors.text }]}>{item.label}</Text>
-                  {selectedValue === item.value && <Icon name="check" size={20} color={theme.colors.primary} />}
+                  {selectedValue === item.value && <Icon name="check" size={moderateScale(20)} color={theme.colors.primary} />}
                 </TouchableOpacity>
               )} 
             />
@@ -114,12 +124,18 @@ const CustomPicker = ({ selectedValue, onValueChange, children, style }) => {
     </View>
   );
 };
+
 CustomPicker.Item = ({ label, value }) => null;
 
 const ThemeProvider = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  
   useEffect(() => { 
-    AsyncStorage.getItem('darkTheme').then(saved => saved && setIsDarkMode(saved === 'true')).catch(console.log); 
+    AsyncStorage.getItem('darkTheme').then(saved => {
+      if (saved !== null) {
+        setIsDarkMode(saved === 'true');
+      }
+    }).catch(console.log); 
   }, []);
   
   const toggleTheme = async () => { 
@@ -139,7 +155,13 @@ const ThemeProvider = ({ children }) => {
   );
 };
 
-const useTheme = () => useContext(ThemeContext);
+const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within ThemeProvider');
+  }
+  return context;
+};
 
 const GradientButton = ({ title, onPress, style, disabled = false }) => {
   const { theme } = useTheme();
@@ -166,13 +188,13 @@ const CustomInput = ({ placeholder, value, onChangeText, secureTextEntry = false
   const { theme } = useTheme();
   return (
     <View style={[styles.inputCont, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }, style]}>
-      {icon && <Icon name={icon} size={20} color={theme.colors.border} style={styles.inputIcon} />}
+      {icon && <Icon name={icon} size={moderateScale(20)} color={theme.colors.border} style={styles.inputIcon} />}
       <TextInput 
         placeholder={placeholder} 
         value={value} 
         onChangeText={onChangeText} 
         secureTextEntry={secureTextEntry} 
-        style={[styles.textInput, { color: theme.colors.text }]} 
+        style={[styles.textInput, { color: theme.colors.text, fontSize: moderateScale(16) }]} 
         placeholderTextColor={theme.colors.border} 
       />
     </View>
@@ -204,7 +226,10 @@ function LoginScreen({ navigation }) {
   const { theme } = useTheme();
 
   const login = async () => {
-    if (!email || !password) return alert('Please fill in all fields');
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
     setLoading(true);
     try { 
       const stored = await AsyncStorage.getItem(`user_${email}`); 
@@ -212,10 +237,10 @@ function LoginScreen({ navigation }) {
         await AsyncStorage.setItem('currentUser', email);
         navigation.replace('Main', { userEmail: email }); 
       } else {
-        alert('Invalid credentials'); 
+        Alert.alert('Error', 'Invalid credentials'); 
       }
     } catch { 
-      alert('Login failed. Please try again.'); 
+      Alert.alert('Error', 'Login failed. Please try again.'); 
     }
     setLoading(false);
   };
@@ -225,7 +250,7 @@ function LoginScreen({ navigation }) {
       <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
       <LinearGradient colors={theme.colors.gradient} style={styles.headerGrad}>
         <View style={styles.logoContainer}>
-          <Icon name="school" size={60} color="white" />
+          <Icon name="school" size={moderateScale(60)} color="white" />
           <Text style={styles.appTitle}>CampusConnect</Text>
           <Text style={styles.appSubtitle}>Connect • Learn • Grow</Text>
         </View>
@@ -239,7 +264,7 @@ function LoginScreen({ navigation }) {
             value={email} 
             onChangeText={setEmail} 
             icon="email" 
-            style={{ marginBottom: 16 }} 
+            style={{ marginBottom: verticalScale(16) }} 
           />
           <CustomInput 
             placeholder="Password" 
@@ -247,13 +272,13 @@ function LoginScreen({ navigation }) {
             onChangeText={setPassword} 
             secureTextEntry 
             icon="lock" 
-            style={{ marginBottom: 24 }} 
+            style={{ marginBottom: verticalScale(24) }} 
           />
           <GradientButton 
             title={loading ? "Signing In..." : "Sign In"} 
             onPress={login} 
             disabled={loading} 
-            style={{ marginBottom: 16 }} 
+            style={{ marginBottom: verticalScale(16) }} 
           />
           <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.linkButton}>
             <Text style={[styles.linkText, { color: theme.colors.primary }]}>
@@ -278,10 +303,18 @@ function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
 
   const register = async () => {
-    if (!email || !password || !confirmPassword || !name || !studentId || !department || !semester) 
-      return alert('Please fill in all fields');
-    if (password !== confirmPassword) return alert('Passwords do not match');
-    if (password.length < 6) return alert('Password must be at least 6 characters');
+    if (!email || !password || !confirmPassword || !name || !studentId || !department || !semester) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
     setLoading(true);
     try { 
       await AsyncStorage.setItem(`user_${email}`, JSON.stringify({ 
@@ -291,13 +324,13 @@ function RegisterScreen({ navigation }) {
         studentId, 
         department, 
         semester,
-        avatar: null // No avatar during registration
+        avatar: null
       }));
       await AsyncStorage.setItem('currentUser', email);
-      alert('Account created! 🎉'); 
+      Alert.alert('Success', 'Account created! 🎉'); 
       navigation.replace('Main', { userEmail: email });
     } catch { 
-      alert('Registration failed.'); 
+      Alert.alert('Error', 'Registration failed.'); 
     }
     setLoading(false);
   };
@@ -311,7 +344,7 @@ function RegisterScreen({ navigation }) {
         <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
         <LinearGradient colors={theme.colors.gradient} style={styles.headerGrad}>
           <View style={styles.logoContainer}>
-            <Icon name="person-add" size={60} color="white" />
+            <Icon name="person-add" size={moderateScale(60)} color="white" />
             <Text style={styles.appTitle}>Join Us</Text>
             <Text style={styles.appSubtitle}>Create your account</Text>
           </View>
@@ -319,17 +352,18 @@ function RegisterScreen({ navigation }) {
         <ScrollView 
           contentContainerStyle={styles.registerFormContainer}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <AnimatedCard style={styles.loginCard}>
             <Text style={[styles.formTitle, { color: theme.colors.text }]}>Create Account</Text>
-            <CustomInput placeholder="Full Name" value={name} onChangeText={setName} icon="person" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Student ID" value={studentId} onChangeText={setStudentId} icon="badge" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Department" value={department} onChangeText={setDepartment} icon="school" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Semester" value={semester} onChangeText={setSemester} icon="class" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Email" value={email} onChangeText={setEmail} icon="email" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry icon="lock" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry icon="lock" style={{ marginBottom: 24 }} />
-            <GradientButton title={loading ? "Creating..." : "Create Account"} onPress={register} disabled={loading} style={{ marginBottom: 16 }} />
+            <CustomInput placeholder="Full Name" value={name} onChangeText={setName} icon="person" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Student ID" value={studentId} onChangeText={setStudentId} icon="badge" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Department" value={department} onChangeText={setDepartment} icon="school" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Semester" value={semester} onChangeText={setSemester} icon="class" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Email" value={email} onChangeText={setEmail} icon="email" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry icon="lock" style={{ marginBottom: verticalScale(16) }} />
+            <CustomInput placeholder="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry icon="lock" style={{ marginBottom: verticalScale(24) }} />
+            <GradientButton title={loading ? "Creating..." : "Create Account"} onPress={register} disabled={loading} style={{ marginBottom: verticalScale(16) }} />
             <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.linkButton}>
               <Text style={[styles.linkText, { color: theme.colors.primary }]}>
                 Have an account? <Text style={styles.linkTextBold}>Sign In</Text>
@@ -341,59 +375,73 @@ function RegisterScreen({ navigation }) {
     </KeyboardAvoidingView>
   );
 }
-// RecommendationBar for HomeScreen
-const RecommendationBar = ({ events, onCategory, onSort, selectedCategory, selectedSort }) => {
+
+// RecommendationBar Component
+const RecommendationBar = ({ events, selectedCategory, selectedSort, onCategoryPress, onSortPress }) => {
   const { theme } = useTheme();
-  // Unique categories from events
-  const categories = Array.from(new Set(events.map(e => e.category))).filter(Boolean);
-  const sorts = [
+  
+  // Get unique categories from events
+  const categories = ['All', ...new Set(events.map(e => e.category).filter(Boolean))];
+  const sortOptions = [
     { label: 'Newest', value: 'Newest' },
     { label: 'Alphabetical', value: 'Alphabetical' }
   ];
+
   return (
     <View style={styles.recommendationBar}>
       <Text style={[styles.recommendationBarTitle, { color: theme.colors.text }]}>Recommended: </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'center' }}>
-        {['All', ...categories].map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              styles.recommendationBtn,
-              {
-                backgroundColor: selectedCategory === cat ? theme.colors.primary : theme.colors.surface,
-                borderColor: theme.colors.primary,
-              }
-            ]}
-            onPress={() => onCategory(cat)}
-          >
-            <Text style={[
-              styles.recommendationBtnText,
-              { color: selectedCategory === cat ? 'white' : theme.colors.primary }
-            ]}>{cat}</Text>
-          </TouchableOpacity>
-        ))}
-        {sorts.map(sort => (
-          <TouchableOpacity
-            key={sort.value}
-            style={[
-              styles.recommendationBtn,
-              {
-                backgroundColor: selectedSort === sort.value ? theme.colors.accent : theme.colors.surface,
-                borderColor: theme.colors.accent,
-              }
-            ]}
-            onPress={() => onSort(sort.value)}
-          >
-            <Text style={[
-              styles.recommendationBtnText,
-              { color: selectedSort === sort.value ? 'white' : theme.colors.accent }
-            ]}>{sort.label}</Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.recommendationScroll}
+      >
+        <View style={styles.recommendationButtons}>
+          {categories.map(cat => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.recommendationBtn,
+                {
+                  backgroundColor: selectedCategory === cat ? theme.colors.primary : theme.colors.surface,
+                  borderColor: theme.colors.primary,
+                }
+              ]}
+              onPress={() => onCategoryPress(cat)}
+            >
+              <Text style={[
+                styles.recommendationBtnText,
+                { color: selectedCategory === cat ? 'white' : theme.colors.primary }
+              ]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {sortOptions.map(sort => (
+            <TouchableOpacity
+              key={sort.value}
+              style={[
+                styles.recommendationBtn,
+                {
+                  backgroundColor: selectedSort === sort.value ? theme.colors.accent : theme.colors.surface,
+                  borderColor: theme.colors.accent,
+                }
+              ]}
+              onPress={() => onSortPress(sort.value)}
+            >
+              <Text style={[
+                styles.recommendationBtnText,
+                { color: selectedSort === sort.value ? 'white' : theme.colors.accent }
+              ]}>
+                {sort.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
 };
+
 function HomeScreen({ navigation }) {
   const [events, setEvents] = useState([]); 
   const [search, setSearch] = useState(''); 
@@ -403,31 +451,31 @@ function HomeScreen({ navigation }) {
   const { theme } = useTheme(); 
   const [loading, setLoading] = useState(true);
 
-  // Fetch events and user registrations
   useEffect(() => { 
-    const fetchEvents = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(EVENTS_API);
-        const eventsWithImages = response.data.map(event => ({
+        const [eventsResponse, allKeys] = await Promise.all([
+          axios.get(EVENTS_API),
+          AsyncStorage.getAllKeys()
+        ]);
+        
+        const eventsWithImages = eventsResponse.data.map(event => ({
           ...event,
           image: event.image || 'https://via.placeholder.com/400x200?text=Event+Image'
         }));
+        
         setEvents(eventsWithImages);
+        
+        const regKeys = allKeys.filter(key => key.startsWith('reg_'));
+        setRegisteredEventIds(regKeys.map(key => key.replace('reg_', '')));
       } catch (error) {
-        console.error('Error fetching events:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
-    fetchEvents();
-
-    // Fetch registered event IDs for this user
-    const fetchRegistered = async () => {
-      const allKeys = await AsyncStorage.getAllKeys();
-      const regKeys = allKeys.filter(key => key.startsWith('reg_'));
-      setRegisteredEventIds(regKeys.map(key => key.replace('reg_', '')));
-    };
-    fetchRegistered();
+    
+    fetchData();
   }, []);
 
   // Find the category the user registers for the most
@@ -441,12 +489,12 @@ function HomeScreen({ navigation }) {
   const sortedCategories = Object.entries(categoryFrequency).sort((a, b) => b[1] - a[1]);
   const mostFrequentCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : null;
 
-  // Recommended events: upcoming events from user's top category that they haven't registered yet
+  // Recommended events
   const recommendedEvents = events.filter(
     e => mostFrequentCategory && e.category === mostFrequentCategory && !registeredEventIds.includes(e.id.toString())
-  ).slice(0, 5); // show max 5 recommendations
+  ).slice(0, 5);
 
-  // Current filters as before
+  // Filter and sort events
   const filtered = events
     .filter(e => (category === 'All' || e.category === category) && 
       (e.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -461,130 +509,153 @@ function HomeScreen({ navigation }) {
       <View style={[styles.headerContainer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Upcoming Events</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-          <Icon name="settings" size={24} color={theme.colors.text} />
+          <Icon name="settings" size={moderateScale(24)} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
-      <View style={[styles.filtersContainer, { backgroundColor: theme.colors.surface }]}>
-        <CustomInput 
-          placeholder="Search events..." 
-          value={search} 
-          onChangeText={setSearch} 
-          icon="search" 
-          style={{ marginBottom: 12 }} 
-        />
-        {/* RecommendationBar for quick filter chips remains */}
-        <RecommendationBar
-          events={events}
-          currentCategory={category}
-          currentSort={sort}
-          onCategoryPress={setCategory}
-          onSortPress={setSort}
-        />
-        {/* Personalized Recommendations */}
-        {mostFrequentCategory && recommendedEvents.length > 0 && (
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{
-              fontWeight: 'bold',
-              fontSize: 16,
-              marginBottom: 8,
-              color: theme.colors.text
-            }}>
-              Recommended for you ({mostFrequentCategory})
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 8}}>
-              {recommendedEvents.map(ev => (
-                <TouchableOpacity key={ev.id} onPress={() => navigation.navigate('Details', { event: ev })}>
-                  <AnimatedCard style={{ width: 170, marginRight: 12, padding: 0 }}>
-                    <Image source={{ uri: ev.image }} style={{ width: 170, height: 90, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
-                    <View style={{ padding: 10 }}>
-                      <Text style={{ fontWeight: 'bold', color: theme.colors.text, fontSize: 14 }} numberOfLines={2}>{ev.name}</Text>
-                      <Text style={{ color: theme.colors.border, fontSize: 12 }} numberOfLines={1}>{ev.venue}</Text>
-                      <Text style={{ color: theme.colors.border, fontSize: 12 }}>{new Date(ev.time).toLocaleDateString()}</Text>
+      
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.filtersContainer, { backgroundColor: theme.colors.surface }]}>
+          <CustomInput 
+            placeholder="Search events..." 
+            value={search} 
+            onChangeText={setSearch} 
+            icon="search" 
+            style={{ marginBottom: verticalScale(12) }} 
+          />
+          
+          <RecommendationBar
+            events={events}
+            selectedCategory={category}
+            selectedSort={sort}
+            onCategoryPress={setCategory}
+            onSortPress={setSort}
+          />
+          
+          {mostFrequentCategory && recommendedEvents.length > 0 && (
+            <View style={styles.recommendationSection}>
+              <Text style={[styles.recommendationSectionTitle, { color: theme.colors.text }]}>
+                Recommended for you ({mostFrequentCategory})
+              </Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.recommendationScrollView}
+              >
+                {recommendedEvents.map(ev => (
+                  <TouchableOpacity 
+                    key={ev.id} 
+                    onPress={() => navigation.navigate('Details', { event: ev })}
+                    style={styles.recommendationCardContainer}
+                  >
+                    <AnimatedCard style={styles.recommendationCard}>
+                      <Image 
+                        source={{ uri: ev.image }} 
+                        style={styles.recommendationImage} 
+                      />
+                      <View style={styles.recommendationCardContent}>
+                        <Text style={[styles.recommendationCardTitle, { color: theme.colors.text }]} numberOfLines={2}>
+                          {ev.name}
+                        </Text>
+                        <Text style={[styles.recommendationCardVenue, { color: theme.colors.border }]} numberOfLines={1}>
+                          {ev.venue}
+                        </Text>
+                        <Text style={[styles.recommendationCardDate, { color: theme.colors.border }]}>
+                          {new Date(ev.time).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </AnimatedCard>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          
+          <View style={styles.filtersRow}>
+            <View style={[styles.pickerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              <CustomPicker selectedValue={category} onValueChange={setCategory}>
+                <CustomPicker.Item label="All Categories" value="All" />
+                <CustomPicker.Item label="Workshop" value="Workshop" />
+                <CustomPicker.Item label="Seminar" value="Seminar" />
+                <CustomPicker.Item label="Sports" value="Sports" />
+                <CustomPicker.Item label="Cultural" value="Cultural" />
+                <CustomPicker.Item label="Other" value="Other" />
+              </CustomPicker>
+            </View>
+            <View style={[styles.pickerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              <CustomPicker selectedValue={sort} onValueChange={setSort}>
+                <CustomPicker.Item label="Newest First" value="Newest" />
+                <CustomPicker.Item label="Alphabetical" value="Alphabetical" />
+              </CustomPicker>
+            </View>
+          </View>
+        </View>
+        
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading events...</Text>
+          </View>
+        ) : (
+          <View style={styles.eventsListContainer}>
+            {filtered.length > 0 ? (
+              filtered.map((item) => (
+                <TouchableOpacity 
+                  key={item.id} 
+                  onPress={() => navigation.navigate('Details', { event: item })} 
+                  activeOpacity={0.9}
+                  style={styles.eventCardContainer}
+                >
+                  <AnimatedCard style={styles.eventCard}>
+                    <Image source={{ uri: item.image }} style={styles.eventImage} />
+                    <View style={styles.eventContent}>
+                      <View style={styles.eventHeader}>
+                        <Text style={[styles.eventTitle, { color: theme.colors.text }]} numberOfLines={2}>
+                          {item.name}
+                        </Text>
+                        <View style={[styles.categoryBadge, { backgroundColor: theme.colors.primary }]}>
+                          <Text style={styles.categoryText}>{item.category}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.eventDetails}>
+                        <View style={styles.detailRow}>
+                          <Icon name="calendar-today" size={moderateScale(16)} color={theme.colors.border} />
+                          <Text style={[styles.eventTime, { color: theme.colors.border }]}>
+                            {new Date(item.time).toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Icon name="location-on" size={moderateScale(16)} color={theme.colors.border} />
+                          <Text style={[styles.eventVenue, { color: theme.colors.border }]} numberOfLines={1}>
+                            {item.venue}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.eventDescription, { color: theme.colors.text }]} numberOfLines={3}>
+                        {item.description}
+                      </Text>
                     </View>
                   </AnimatedCard>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon name="search-off" size={moderateScale(48)} color={theme.colors.border} />
+                <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No events found</Text>
+                <Text style={[styles.emptyStateSubtitle, { color: theme.colors.border }]}>
+                  Try adjusting your search criteria
+                </Text>
+              </View>
+            )}
           </View>
         )}
-        <View style={styles.filtersRow}>
-          <View style={[styles.pickerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <CustomPicker selectedValue={category} onValueChange={setCategory}>
-              <CustomPicker.Item label="All Categories" value="All" />
-              <CustomPicker.Item label="Workshop" value="Workshop" />
-              <CustomPicker.Item label="Seminar" value="Seminar" />
-              <CustomPicker.Item label="Sports" value="Sports" />
-              <CustomPicker.Item label="Cultural" value="Cultural" />
-            </CustomPicker>
-          </View>
-          <View style={[styles.pickerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <CustomPicker selectedValue={sort} onValueChange={setSort}>
-              <CustomPicker.Item label="Newest First" value="Newest" />
-              <CustomPicker.Item label="Alphabetical" value="Alphabetical" />
-            </CustomPicker>
-          </View>
-        </View>
-      </View>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading events...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              key={item.id} 
-              onPress={() => navigation.navigate('Details', { event: item })} 
-              activeOpacity={0.9}
-            >
-              <AnimatedCard style={styles.eventCard}>
-                <Image source={{ uri: item.image }} style={styles.eventImage} />
-                <View style={styles.eventContent}>
-                  <View style={styles.eventHeader}>
-                    <Text style={[styles.eventTitle, { color: theme.colors.text }]} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-                    <View style={[styles.categoryBadge, { backgroundColor: theme.colors.primary }]}>
-                      <Text style={styles.categoryText}>{item.category}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.eventDetails}>
-                    <View style={styles.detailRow}>
-                      <Icon name="calendar-today" size={16} color={theme.colors.border} />
-                      <Text style={[styles.eventTime, { color: theme.colors.border }]}>
-                        {new Date(item.time).toLocaleString()}
-                      </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Icon name="location-on" size={16} color={theme.colors.border} />
-                      <Text style={[styles.eventVenue, { color: theme.colors.border }]}>{item.venue}</Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.eventDescription, { color: theme.colors.text }]} numberOfLines={3}>
-                    {item.description}
-                  </Text>
-                </View>
-              </AnimatedCard>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Icon name="search-off" size={48} color={theme.colors.border} />
-              <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No events found</Text>
-              <Text style={[styles.emptyStateSubtitle, { color: theme.colors.border }]}>
-                Try adjusting your search criteria
-              </Text>
-            </View>
-          }
-          contentContainerStyle={styles.eventsList}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
+
 function RegisteredEventsScreen({ navigation }) {
   const [events, setEvents] = useState([]);
   const [registeredEvents, setRegisteredEvents] = useState([]);
@@ -594,21 +665,23 @@ function RegisteredEventsScreen({ navigation }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch all events
-        const eventsResponse = await axios.get(EVENTS_API);
-        setEvents(eventsResponse.data.map(event => ({
+        const [eventsResponse, allKeys] = await Promise.all([
+          axios.get(EVENTS_API),
+          AsyncStorage.getAllKeys()
+        ]);
+        
+        const eventsWithImages = eventsResponse.data.map(event => ({
           ...event,
           image: event.image || 'https://via.placeholder.com/400x200?text=Event+Image'
-        })));
+        }));
         
-        // Get registered event IDs from AsyncStorage
-        const allKeys = await AsyncStorage.getAllKeys();
+        setEvents(eventsWithImages);
+        
         const regKeys = allKeys.filter(key => key.startsWith('reg_'));
-        const regEvents = regKeys.map(key => key.replace('reg_', ''));
+        const regEventIds = regKeys.map(key => key.replace('reg_', ''));
         
-        // Filter events to only show registered ones
-        const filtered = eventsResponse.data.filter(event => 
-          regEvents.includes(event.id.toString())
+        const filtered = eventsWithImages.filter(event => 
+          regEventIds.includes(event.id.toString())
         );
         
         setRegisteredEvents(filtered);
@@ -641,9 +714,10 @@ function RegisteredEventsScreen({ navigation }) {
             <TouchableOpacity 
               onPress={() => navigation.navigate('Details', { event: item })} 
               activeOpacity={0.9}
+              style={styles.eventCardContainer}
             >
               <AnimatedCard style={styles.eventCard}>
-                <Image source={{ uri: item.image || 'https://via.placeholder.com/400x200?text=Event+Image' }} style={styles.eventImage} />
+                <Image source={{ uri: item.image }} style={styles.eventImage} />
                 <View style={styles.eventContent}>
                   <View style={styles.eventHeader}>
                     <Text style={[styles.eventTitle, { color: theme.colors.text }]} numberOfLines={2}>
@@ -655,14 +729,16 @@ function RegisteredEventsScreen({ navigation }) {
                   </View>
                   <View style={styles.eventDetails}>
                     <View style={styles.detailRow}>
-                      <Icon name="calendar-today" size={16} color={theme.colors.border} />
+                      <Icon name="calendar-today" size={moderateScale(16)} color={theme.colors.border} />
                       <Text style={[styles.eventTime, { color: theme.colors.border }]}>
                         {new Date(item.time).toLocaleString()}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Icon name="location-on" size={16} color={theme.colors.border} />
-                      <Text style={[styles.eventVenue, { color: theme.colors.border }]}>{item.venue}</Text>
+                      <Icon name="location-on" size={moderateScale(16)} color={theme.colors.border} />
+                      <Text style={[styles.eventVenue, { color: theme.colors.border }]} numberOfLines={1}>
+                        {item.venue}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -674,7 +750,7 @@ function RegisteredEventsScreen({ navigation }) {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Icon name="event-busy" size={48} color={theme.colors.border} />
+          <Icon name="event-busy" size={moderateScale(48)} color={theme.colors.border} />
           <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No registered events</Text>
           <Text style={[styles.emptyStateSubtitle, { color: theme.colors.border }]}>
             Register for events to see them here
@@ -682,7 +758,7 @@ function RegisteredEventsScreen({ navigation }) {
           <GradientButton 
             title="Browse Events" 
             onPress={() => navigation.navigate('Home')} 
-            style={{ marginTop: 20 }} 
+            style={{ marginTop: verticalScale(20) }} 
           />
         </View>
       )}
@@ -696,7 +772,6 @@ function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate loading notifications
     const timer = setTimeout(() => {
       setNotifications([
         {
@@ -745,7 +820,7 @@ function NotificationsScreen() {
           renderItem={({ item }) => (
             <AnimatedCard style={[
               styles.notificationCard, 
-              !item.read && { borderLeftWidth: 4, borderLeftColor: theme.colors.primary }
+              !item.read && { borderLeftWidth: moderateScale(4), borderLeftColor: theme.colors.primary }
             ]}>
               <View style={styles.notificationHeader}>
                 <Text style={[styles.notificationTitle, { color: theme.colors.text }]}>
@@ -765,7 +840,7 @@ function NotificationsScreen() {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Icon name="notifications-off" size={48} color={theme.colors.border} />
+          <Icon name="notifications-off" size={moderateScale(48)} color={theme.colors.border} />
           <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No notifications</Text>
           <Text style={[styles.emptyStateSubtitle, { color: theme.colors.border }]}>
             You'll see important updates here
@@ -795,10 +870,12 @@ function ProfileScreen({ navigation }) {
           setUser(JSON.parse(userData));
         }
       } catch (e) {
+        console.error('Error loading user:', e);
         setUser(null);
       }
       setLoading(false);
     };
+    
     const unsubscribe = navigation.addListener("focus", loadUser);
     loadUser();
     return unsubscribe;
@@ -810,7 +887,7 @@ function ProfileScreen({ navigation }) {
       <View style={[styles.headerContainer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>My Profile</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-          <Icon name="settings" size={24} color={theme.colors.text} />
+          <Icon name="settings" size={moderateScale(24)} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
       
@@ -819,36 +896,49 @@ function ProfileScreen({ navigation }) {
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading profile...</Text>
         </View>
       ) : user ? (
-        <ScrollView contentContainerStyle={styles.profileContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          contentContainerStyle={styles.profileContainer} 
+          showsVerticalScrollIndicator={false}
+        >
           <AnimatedCard style={styles.profileCard}>
             <View style={styles.profileHeader}>
               {user.avatar ? (
                 <Image source={{ uri: user.avatar }} style={styles.profileAvatar} />
               ) : (
                 <View style={[styles.profileAvatar, { backgroundColor: theme.colors.border, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Icon name="person" size={40} color={theme.colors.card} />
+                  <Icon name="person" size={moderateScale(40)} color={theme.colors.card} />
                 </View>
               )}
               <View style={styles.profileInfo}>
-                <Text style={[styles.profileName, { color: theme.colors.text }]}>{user.name}</Text>
-                <Text style={[styles.profileEmail, { color: theme.colors.border }]}>{user.email}</Text>
+                <Text style={[styles.profileName, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user.name}
+                </Text>
+                <Text style={[styles.profileEmail, { color: theme.colors.border }]} numberOfLines={1}>
+                  {user.email}
+                </Text>
               </View>
             </View>
             <View style={styles.profileDetails}>
               <View style={[styles.detailItem, { borderBottomColor: theme.colors.border }]}>
-                <Icon name="badge" size={20} color={theme.colors.primary} />
+                <Icon name="badge" size={moderateScale(20)} color={theme.colors.primary} />
                 <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Student ID:</Text>
-                <Text style={[styles.detailValue, { color: theme.colors.text }]}>{user.studentId}</Text>
+                <Text style={[styles.detailValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user.studentId}
+                </Text>
               </View>
               <View style={[styles.detailItem, { borderBottomColor: theme.colors.border }]}>
-                <Icon name="school" size={20} color={theme.colors.primary} />
+                <Icon name="school" size={moderateScale(20)} color={theme.colors.primary} />
                 <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Department:</Text>
-                <Text style={[styles.detailValue, { color: theme.colors.text }]}>{user.department}</Text>
+                <Text style={[styles.detailValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user.department}
+                </Text>
               </View>
               <View style={[styles.detailItem, { borderBottomColor: theme.colors.border }]}>
-                <Icon name="class" size={20} color={theme.colors.primary} />
+                <Icon name="class" size={moderateScale(20)} color={theme.colors.primary} />
                 <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Semester:</Text>
-                <Text style={[styles.detailValue, { color: theme.colors.text }]}>{user.semester}</Text>
+                <Text style={[styles.detailValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user.semester}
+                </Text>
               </View>
             </View>
             <View style={styles.profileActions}>
@@ -856,8 +946,8 @@ function ProfileScreen({ navigation }) {
                 style={[styles.profileActionBtn, { backgroundColor: theme.colors.surface }]}
                 onPress={() => navigation.navigate('EditProfile', { user })}
               >
-                <Icon name="edit" size={20} color={theme.colors.primary} />
-                <Text style={[styles.profileActionText, { color: theme.colors.primary }]}>
+                <Icon name="edit" size={moderateScale(20)} color={theme.colors.primary} />
+                <Text style={[styles.profileActionText, { color: theme.colors.primary }]} numberOfLines={1}>
                   Edit Profile
                 </Text>
               </TouchableOpacity>
@@ -867,10 +957,10 @@ function ProfileScreen({ navigation }) {
               >
                 <Icon 
                   name={isDarkMode ? "wb-sunny" : "nights-stay"} 
-                  size={20} 
+                  size={moderateScale(20)} 
                   color={theme.colors.primary} 
                 />
-                <Text style={[styles.profileActionText, { color: theme.colors.primary }]}>
+                <Text style={[styles.profileActionText, { color: theme.colors.primary }]} numberOfLines={1}>
                   {isDarkMode ? "Light Mode" : "Dark Mode"}
                 </Text>
               </TouchableOpacity>
@@ -880,22 +970,22 @@ function ProfileScreen({ navigation }) {
             <Text style={[styles.statsTitle, { color: theme.colors.text }]}>My Activity</Text>
             <View style={styles.statsGrid}>
               <View style={[styles.statItem, { backgroundColor: theme.colors.surface }]}>
-                <Icon name="event" size={24} color={theme.colors.primary} />
+                <Icon name="event" size={moderateScale(24)} color={theme.colors.primary} />
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>12</Text>
                 <Text style={[styles.statLabel, { color: theme.colors.border }]}>Events</Text>
               </View>
               <View style={[styles.statItem, { backgroundColor: theme.colors.surface }]}>
-                <Icon name="check-circle" size={24} color={theme.colors.success} />
+                <Icon name="check-circle" size={moderateScale(24)} color={theme.colors.success} />
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>8</Text>
                 <Text style={[styles.statLabel, { color: theme.colors.border }]}>Attended</Text>
               </View>
               <View style={[styles.statItem, { backgroundColor: theme.colors.surface }]}>
-                <Icon name="star" size={24} color={theme.colors.warning} />
+                <Icon name="star" size={moderateScale(24)} color={theme.colors.warning} />
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>4.8</Text>
                 <Text style={[styles.statLabel, { color: theme.colors.border }]}>Avg Rating</Text>
               </View>
               <View style={[styles.statItem, { backgroundColor: theme.colors.surface }]}>
-                <Icon name="forum" size={24} color={theme.colors.accent} />
+                <Icon name="forum" size={moderateScale(24)} color={theme.colors.accent} />
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>15</Text>
                 <Text style={[styles.statLabel, { color: theme.colors.border }]}>Feedbacks</Text>
               </View>
@@ -904,11 +994,16 @@ function ProfileScreen({ navigation }) {
         </ScrollView>
       ) : (
         <View style={styles.emptyState}>
-          <Icon name="person-off" size={48} color={theme.colors.border} />
+          <Icon name="person-off" size={moderateScale(48)} color={theme.colors.border} />
           <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No user data</Text>
           <Text style={[styles.emptyStateSubtitle, { color: theme.colors.border }]}>
             Please log in again.
           </Text>
+          <GradientButton 
+            title="Go to Login" 
+            onPress={() => navigation.replace('Login')} 
+            style={{ marginTop: verticalScale(20) }} 
+          />
         </View>
       )}
     </SafeAreaView>
@@ -931,7 +1026,7 @@ function EditProfileScreen({ route, navigation }) {
         let userObj = route.params?.user;
         if (!userObj) {
           const currentEmail = await AsyncStorage.getItem('currentUser');
-          setEmail(currentEmail);
+          setEmail(currentEmail || '');
           const userData = await AsyncStorage.getItem(`user_${currentEmail}`);
           userObj = userData ? JSON.parse(userData) : {};
         } else {
@@ -942,7 +1037,9 @@ function EditProfileScreen({ route, navigation }) {
         setDepartment(userObj.department || '');
         setSemester(userObj.semester || '');
         setImage(userObj.avatar || null);
-      } catch { }
+      } catch (error) {
+        console.error('Error loading user:', error);
+      }
     };
     getUser();
   }, [route.params]);
@@ -950,7 +1047,7 @@ function EditProfileScreen({ route, navigation }) {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Camera roll permission required.');
+      Alert.alert('Permission Required', 'Camera roll permission required.');
       return;
     }
 
@@ -958,7 +1055,7 @@ function EditProfileScreen({ route, navigation }) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 1,
+      quality: 0.8,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -968,9 +1065,15 @@ function EditProfileScreen({ route, navigation }) {
 
   const saveProfile = async () => {
     if (!name || !studentId || !department || !semester) {
-      Alert.alert('Missing Info', 'Please fill out all required fields.');
+      Alert.alert('Missing Information', 'Please fill out all required fields.');
       return;
     }
+    
+    if (!email) {
+      Alert.alert('Error', 'Cannot find user email. Please log in again.');
+      return;
+    }
+    
     setLoading(true);
     try {
       const userData = await AsyncStorage.getItem(`user_${email}`);
@@ -986,7 +1089,8 @@ function EditProfileScreen({ route, navigation }) {
       await AsyncStorage.setItem(`user_${email}`, JSON.stringify(newUser));
       Alert.alert("Success", "Profile updated successfully!");
       navigation.goBack();
-    } catch {
+    } catch (error) {
+      console.error('Error saving profile:', error);
       Alert.alert("Error", "Could not update profile.");
     }
     setLoading(false);
@@ -995,42 +1099,82 @@ function EditProfileScreen({ route, navigation }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+      <ScrollView 
+        contentContainerStyle={styles.editProfileContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={[styles.headerContainer, { backgroundColor: theme.colors.card }]}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-back" size={24} color={theme.colors.text} />
+            <Icon name="arrow-back" size={moderateScale(24)} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Edit Profile</Text>
-          <View style={{ width: 24 }} />
+          <View style={{ width: moderateScale(24) }} />
         </View>
-        <View style={[styles.profileContainer]}>
+        
+        <View style={styles.profileEditContainer}>
           <AnimatedCard style={styles.profileCard}>
-            <Text style={[styles.formTitle, { color: theme.colors.text, textAlign: 'center', marginBottom: 20 }]}>Edit Your Profile</Text>
+            <Text style={[styles.formTitle, { color: theme.colors.text, textAlign: 'center', marginBottom: verticalScale(20) }]}>
+              Edit Your Profile
+            </Text>
+            
             <View style={styles.avatarContainer}>
               {image ? (
                 <Image source={{ uri: image }} style={styles.profileAvatar} />
               ) : (
-                <View style={[styles.profileAvatar, {
-                  backgroundColor: theme.colors.border,
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }]}>
-                  <Icon name="person" size={40} color={theme.colors.card} />
+                <View style={[
+                  styles.profileAvatar, 
+                  { 
+                    backgroundColor: theme.colors.border,
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }
+                ]}>
+                  <Icon name="person" size={moderateScale(40)} color={theme.colors.card} />
                 </View>
               )}
-              <TouchableOpacity onPress={pickImage} style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}>
+              <TouchableOpacity 
+                onPress={pickImage} 
+                style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}
+              >
                 <Text style={styles.uploadButtonText}>Choose Photo</Text>
               </TouchableOpacity>
             </View>
-            <CustomInput placeholder="Full Name" value={name} onChangeText={setName} icon="person" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Student ID" value={studentId} onChangeText={setStudentId} icon="badge" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Department" value={department} onChangeText={setDepartment} icon="school" style={{ marginBottom: 16 }} />
-            <CustomInput placeholder="Semester" value={semester} onChangeText={setSemester} icon="class" style={{ marginBottom: 16 }} />
+            
+            <CustomInput 
+              placeholder="Full Name" 
+              value={name} 
+              onChangeText={setName} 
+              icon="person" 
+              style={{ marginBottom: verticalScale(16) }} 
+            />
+            <CustomInput 
+              placeholder="Student ID" 
+              value={studentId} 
+              onChangeText={setStudentId} 
+              icon="badge" 
+              style={{ marginBottom: verticalScale(16) }} 
+            />
+            <CustomInput 
+              placeholder="Department" 
+              value={department} 
+              onChangeText={setDepartment} 
+              icon="school" 
+              style={{ marginBottom: verticalScale(16) }} 
+            />
+            <CustomInput 
+              placeholder="Semester" 
+              value={semester} 
+              onChangeText={setSemester} 
+              icon="class" 
+              style={{ marginBottom: verticalScale(16) }} 
+            />
+            
             <GradientButton
               title={loading ? "Saving..." : "Save Changes"}
               onPress={saveProfile}
               disabled={loading}
-              style={{ marginTop: 10 }}
+              style={{ marginTop: verticalScale(10) }}
             />
           </AnimatedCard>
         </View>
@@ -1038,6 +1182,7 @@ function EditProfileScreen({ route, navigation }) {
     </SafeAreaView>
   );
 }
+
 function EventDetailsScreen({ route, navigation }) {
   const { event } = route.params;
   const [registered, setRegistered] = useState(false);
@@ -1062,16 +1207,16 @@ function EventDetailsScreen({ route, navigation }) {
     try {
       await AsyncStorage.setItem(`reg_${event.id}`, 'registered');
       setRegistered(true);
-      alert('Successfully registered for this event!');
+      Alert.alert('Success', 'Successfully registered for this event!');
     } catch (error) {
       console.error('Error registering:', error);
-      alert('Failed to register for the event. Please try again.');
+      Alert.alert('Error', 'Failed to register for the event. Please try again.');
     }
   };
 
   const handleCheckIn = () => {
     setCheckedIn(true);
-    alert('Check-in confirmed! Enjoy the event.');
+    Alert.alert('Success', 'Check-in confirmed! Enjoy the event.');
   };
 
   const handleFeedback = () => {
@@ -1081,82 +1226,104 @@ function EventDetailsScreen({ route, navigation }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Image source={{ uri: event.image || 'https://via.placeholder.com/400x200?text=Event+Image' }} style={styles.detailsEventImage} />
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.detailsScrollContent}
+      >
+        <Image 
+          source={{ uri: event.image || 'https://via.placeholder.com/400x200?text=Event+Image' }} 
+          style={[styles.detailsEventImage, { height: height * 0.3 }]} 
+        />
         <View style={styles.detailsContent}>
           <AnimatedCard style={styles.detailsCard}>
             <Text style={[styles.detailsTitle, { color: theme.colors.text }]}>{event.name}</Text>
             <View style={styles.detailsInfo}>
               <View style={styles.detailsInfoItem}>
-                <Icon name="calendar-today" size={20} color={theme.colors.primary} />
+                <Icon name="calendar-today" size={moderateScale(20)} color={theme.colors.primary} />
                 <Text style={[styles.detailsInfoText, { color: theme.colors.text }]}>
                   {new Date(event.time).toLocaleString()}
                 </Text>
               </View>
               <View style={styles.detailsInfoItem}>
-                <Icon name="location-on" size={20} color={theme.colors.primary} />
-                <Text style={[styles.detailsInfoText, { color: theme.colors.text }]}>{event.venue}</Text>
+                <Icon name="location-on" size={moderateScale(20)} color={theme.colors.primary} />
+                <Text style={[styles.detailsInfoText, { color: theme.colors.text }]} numberOfLines={1}>
+                  {event.venue}
+                </Text>
               </View>
               <View style={styles.detailsInfoItem}>
-                <Icon name="category" size={20} color={theme.colors.primary} />
-                <Text style={[styles.detailsInfoText, { color: theme.colors.text }]}>{event.category}</Text>
+                <Icon name="category" size={moderateScale(20)} color={theme.colors.primary} />
+                <Text style={[styles.detailsInfoText, { color: theme.colors.text }]}>
+                  {event.category || 'General'}
+                </Text>
               </View>
               {event.organizer && (
                 <View style={styles.detailsInfoItem}>
-                  <Icon name="person" size={20} color={theme.colors.primary} />
-                  <Text style={[styles.detailsInfoText, { color: theme.colors.text }]}>{event.organizer}</Text>
+                  <Icon name="person" size={moderateScale(20)} color={theme.colors.primary} />
+                  <Text style={[styles.detailsInfoText, { color: theme.colors.text }]} numberOfLines={1}>
+                    {event.organizer}
+                  </Text>
                 </View>
               )}
             </View>
             <Text style={[styles.detailsDescription, { color: theme.colors.text }]}>
-              {event.description}
+              {event.description || 'No description available.'}
             </Text>
-            {event.speakers && (
+            
+            {event.speakers && event.speakers.length > 0 && (
               <View style={styles.speakersSection}>
                 <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Speakers</Text>
                 {event.speakers.map((speaker, index) => (
                   <View key={index} style={[styles.speakerItem, { borderBottomColor: theme.colors.border }]}>
-                    <Image source={{ uri: speaker.avatar || 'https://via.placeholder.com/150' }} style={styles.speakerAvatar} />
+                    <Image 
+                      source={{ uri: speaker.avatar || 'https://via.placeholder.com/150' }} 
+                      style={styles.speakerAvatar} 
+                    />
                     <View style={styles.speakerInfo}>
                       <Text style={[styles.speakerName, { color: theme.colors.text }]}>{speaker.name}</Text>
-                      <Text style={[styles.speakerBio, { color: theme.colors.border }]}>{speaker.bio}</Text>
+                      <Text style={[styles.speakerBio, { color: theme.colors.border }]} numberOfLines={2}>
+                        {speaker.bio}
+                      </Text>
                     </View>
                   </View>
                 ))}
               </View>
             )}
           </AnimatedCard>
+          
           <View style={styles.actionButtons}>
             {!registered ? (
               <GradientButton 
                 title="Register for Event" 
                 onPress={handleRegister} 
-                style={{ marginBottom: 12 }} 
+                style={{ marginBottom: verticalScale(12) }} 
               />
             ) : !checkedIn ? (
               <GradientButton 
                 title="Check In Now" 
                 onPress={handleCheckIn} 
-                style={{ marginBottom: 12 }} 
+                style={{ marginBottom: verticalScale(12) }} 
               />
             ) : (
               <GradientButton 
                 title="Give Feedback" 
                 onPress={handleFeedback} 
-                style={{ marginBottom: 12 }} 
+                style={{ marginBottom: verticalScale(12) }} 
               />
             )}
+            
             {registered && (
               <View style={styles.qrCodeContainer}>
                 <Text style={[styles.qrCodeTitle, { color: theme.colors.text }]}>Your Event Ticket</Text>
                 <View style={[styles.qrCodeCard, { backgroundColor: theme.colors.card }]}>
                   <QRCode 
-                    value={`event_${event.id}_user_123`} 
-                    size={200} 
+                    value={`event_${event.id}_user_${Date.now()}`} 
+                    size={width * 0.5} 
                     color={theme.colors.text} 
                     backgroundColor={theme.colors.card} 
                   />
-                  <Text style={[styles.qrCodeText, { color: theme.colors.text }]}>{event.name}</Text>
+                  <Text style={[styles.qrCodeText, { color: theme.colors.text }]} numberOfLines={2}>
+                    {event.name}
+                  </Text>
                   <Text style={[styles.qrCodeSubtext, { color: theme.colors.border }]}>
                     {new Date(event.time).toLocaleString()}
                   </Text>
@@ -1178,11 +1345,17 @@ function FeedbackScreen({ route, navigation }) {
   const { theme } = useTheme();
 
   const handleSubmit = async () => {
-    if (rating === 0) return alert('Please provide a rating');
-    if (!feedback.trim()) return alert('Please provide feedback');
+    if (rating === 0) {
+      Alert.alert('Rating Required', 'Please provide a rating');
+      return;
+    }
+    if (!feedback.trim()) {
+      Alert.alert('Feedback Required', 'Please provide feedback');
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Get current user data to include their avatar in feedback
       const currentEmail = await AsyncStorage.getItem('currentUser');
       const userData = await AsyncStorage.getItem(`user_${currentEmail}`);
       const user = userData ? JSON.parse(userData) : {};
@@ -1193,13 +1366,14 @@ function FeedbackScreen({ route, navigation }) {
         rating,
         feedback,
         timestamp: new Date().toISOString(),
-        userAvatar: user.avatar || null // Include user's avatar in feedback
+        userAvatar: user.avatar || null
       });
-      alert('Thank you for your feedback!');
+      
+      Alert.alert('Thank You!', 'Thank you for your feedback!');
       navigation.goBack();
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      alert('Failed to submit feedback. Please try again.');
+      Alert.alert('Error', 'Failed to submit feedback. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -1208,17 +1382,21 @@ function FeedbackScreen({ route, navigation }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView contentContainerStyle={styles.feedbackContainer}>
+      <ScrollView 
+        contentContainerStyle={styles.feedbackContainer}
+        keyboardShouldPersistTaps="handled"
+      >
         <AnimatedCard style={styles.feedbackCard}>
           <Text style={[styles.feedbackTitle, { color: theme.colors.text }]}>
             Rate & Review: {event.name}
           </Text>
+          
           <View style={styles.ratingContainer}>
             <StarRating
               rating={rating}
               onChange={setRating}
               maxStars={5}
-              starSize={40}
+              starSize={moderateScale(40)}
               color={theme.colors.primary}
               emptyColor={theme.colors.border}
             />
@@ -1226,9 +1404,11 @@ function FeedbackScreen({ route, navigation }) {
               {rating > 0 ? `You rated ${rating} star${rating > 1 ? 's' : ''}` : 'Tap to rate'}
             </Text>
           </View>
+          
           <Text style={[styles.feedbackLabel, { color: theme.colors.text }]}>
             Your Feedback
           </Text>
+          
           <TextInput
             style={[
               styles.feedbackInput, 
@@ -1244,12 +1424,14 @@ function FeedbackScreen({ route, navigation }) {
             numberOfLines={5}
             value={feedback}
             onChangeText={setFeedback}
+            textAlignVertical="top"
           />
+          
           <GradientButton 
             title={loading ? "Submitting..." : "Submit Feedback"} 
             onPress={handleSubmit} 
             disabled={loading} 
-            style={{ marginTop: 20 }} 
+            style={{ marginTop: verticalScale(20) }} 
           />
         </AnimatedCard>
       </ScrollView>
@@ -1265,12 +1447,11 @@ function SettingsScreen({ navigation }) {
   const handleLogout = async () => {
     setLoading(true);
     try {
-      // Only clear session info, not all user data
       await AsyncStorage.removeItem('currentUser');
       navigation.replace('Login');
     } catch (error) {
       console.error('Logout error:', error);
-      alert('Logout failed. Please try again.');
+      Alert.alert('Error', 'Logout failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -1281,19 +1462,23 @@ function SettingsScreen({ navigation }) {
       <StatusBar barStyle={theme.isDarkMode ? 'light-content' : 'dark-content'} />
       <View style={[styles.headerContainer, { backgroundColor: theme.colors.card }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color={theme.colors.text} />
+          <Icon name="arrow-back" size={moderateScale(24)} color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Settings</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: moderateScale(24) }} />
       </View>
-      <ScrollView contentContainerStyle={styles.settingsContainer}>
+      
+      <ScrollView 
+        contentContainerStyle={styles.settingsContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <AnimatedCard style={styles.settingsCard}>
           <Text style={[styles.settingsSectionTitle, { color: theme.colors.text }]}>
             Preferences
           </Text>
           <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
             <View style={styles.settingText}>
-              <Icon name="notifications" size={20} color={theme.colors.primary} />
+              <Icon name="notifications" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Notifications
               </Text>
@@ -1307,7 +1492,7 @@ function SettingsScreen({ navigation }) {
           </View>
           <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
             <View style={styles.settingText}>
-              <Icon name={isDarkMode ? "nights-stay" : "wb-sunny"} size={20} color={theme.colors.primary} />
+              <Icon name={isDarkMode ? "nights-stay" : "wb-sunny"} size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Dark Mode
               </Text>
@@ -1320,6 +1505,7 @@ function SettingsScreen({ navigation }) {
             />
           </View>
         </AnimatedCard>
+        
         <AnimatedCard style={styles.settingsCard}>
           <Text style={[styles.settingsSectionTitle, { color: theme.colors.text }]}>
             Account
@@ -1329,36 +1515,37 @@ function SettingsScreen({ navigation }) {
             onPress={() => navigation.navigate('Profile')}
           >
             <View style={styles.settingText}>
-              <Icon name="person" size={20} color={theme.colors.primary} />
+              <Icon name="person" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Edit Profile
               </Text>
             </View>
-            <Icon name="chevron-right" size={20} color={theme.colors.border} />
+            <Icon name="chevron-right" size={moderateScale(20)} color={theme.colors.border} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
             onPress={() => navigation.navigate('RegisteredEvents')}
           >
             <View style={styles.settingText}>
-              <Icon name="event" size={20} color={theme.colors.primary} />
+              <Icon name="event" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 My Events
               </Text>
             </View>
-            <Icon name="chevron-right" size={20} color={theme.colors.border} />
+            <Icon name="chevron-right" size={moderateScale(20)} color={theme.colors.border} />
           </TouchableOpacity>
         </AnimatedCard>
+        
         <AnimatedCard style={styles.settingsCard}>
           <Text style={[styles.settingsSectionTitle, { color: theme.colors.text }]}>
             About
           </Text>
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
-            onPress={() => alert('App version 1.0.0')}
+            onPress={() => Alert.alert('App Version', 'CampusConnect v1.0.0')}
           >
             <View style={styles.settingText}>
-              <Icon name="info" size={20} color={theme.colors.primary} />
+              <Icon name="info" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Version
               </Text>
@@ -1370,31 +1557,32 @@ function SettingsScreen({ navigation }) {
             onPress={() => Linking.openURL('https://example.com/terms')}
           >
             <View style={styles.settingText}>
-              <Icon name="description" size={20} color={theme.colors.primary} />
+              <Icon name="description" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Terms of Service
               </Text>
             </View>
-            <Icon name="chevron-right" size={20} color={theme.colors.border} />
+            <Icon name="chevron-right" size={moderateScale(20)} color={theme.colors.border} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
             onPress={() => Linking.openURL('https://example.com/privacy')}
           >
             <View style={styles.settingText}>
-              <Icon name="privacy-tip" size={20} color={theme.colors.primary} />
+              <Icon name="privacy-tip" size={moderateScale(20)} color={theme.colors.primary} />
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 Privacy Policy
               </Text>
             </View>
-            <Icon name="chevron-right" size={20} color={theme.colors.border} />
+            <Icon name="chevron-right" size={moderateScale(20)} color={theme.colors.border} />
           </TouchableOpacity>
         </AnimatedCard>
+        
         <GradientButton 
           title={loading ? "Logging Out..." : "Logout"} 
           onPress={handleLogout} 
           disabled={loading} 
-          style={{ marginTop: 20 }} 
+          style={{ marginTop: verticalScale(20), marginBottom: verticalScale(20) }} 
         />
       </ScrollView>
     </SafeAreaView>
@@ -1404,6 +1592,7 @@ function SettingsScreen({ navigation }) {
 // Main Tab Navigator
 function MainTabs() {
   const { theme } = useTheme();
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -1418,16 +1607,19 @@ function MainTabs() {
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
-          return <Icon name={iconName} size={size} color={color} />;
+          return <Icon name={iconName} size={moderateScale(size)} color={color} />;
         },
         tabBarActiveTintColor: theme.colors.tabIconActive,
         tabBarInactiveTintColor: theme.colors.tabIconInactive,
         tabBarStyle: {
           backgroundColor: theme.colors.tabBar,
           borderTopColor: theme.colors.border,
+          height: verticalScale(60),
+          paddingBottom: moderateScale(5),
+          paddingTop: moderateScale(5),
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: moderateScale(12),
           fontWeight: '500',
         },
         headerShown: false
@@ -1464,231 +1656,749 @@ function AppStack() {
   );
 }
 
-// Styles
-// ...all your imports and code above remain unchanged...
-
+// Responsive Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff',
+    width: '100%',
+  },
   headerGrad: {
     width: '100%',
-    height: height * 0.25,
+    height: verticalScale(200),
     justifyContent: 'center',
     alignItems: 'center',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: moderateScale(30),
+    borderBottomRightRadius: moderateScale(30),
   },
-  logoContainer: { alignItems: 'center' },
-  appTitle: { fontSize: 28, fontWeight: 'bold', color: 'white', marginTop: 10 },
-  appSubtitle: { fontSize: 14, color: 'white', opacity: 0.8 },
-  formContainer: { flex: 1, paddingHorizontal: 20, marginTop: -30, width: '100%' },
-  registerFormContainer: { paddingHorizontal: 20, paddingBottom: 20, width: '100%', flexGrow: 1 },
-  loginCard: { padding: 25, borderRadius: 15, marginBottom: 20, width: '100%' },
-  formTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 5 },
-  formSubtitle: { fontSize: 14, marginBottom: 20 },
-  inputCont: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 15, height: 50, width: '100%' },
-  inputIcon: { marginRight: 10 },
-  textInput: { flex: 1, height: '100%', fontSize: 16 },
-  gradBtn: { borderRadius: 10, overflow: 'hidden', height: 50, width: '100%' },
-  gradBtnInner: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  gradBtnTxt: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  disBtn: { opacity: 0.7 },
-  linkButton: { alignSelf: 'center' },
-  linkText: { fontSize: 14 },
-  linkTextBold: { fontWeight: 'bold' },
+  logoContainer: { 
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(20),
+  },
+  appTitle: { 
+    fontSize: moderateScale(28), 
+    fontWeight: 'bold', 
+    color: 'white', 
+    marginTop: verticalScale(10),
+    textAlign: 'center',
+  },
+  appSubtitle: { 
+    fontSize: moderateScale(14), 
+    color: 'white', 
+    opacity: 0.8,
+    marginTop: verticalScale(5),
+    textAlign: 'center',
+  },
+  formContainer: { 
+    flex: 1, 
+    paddingHorizontal: moderateScale(20), 
+    marginTop: verticalScale(-30), 
+    width: '100%',
+    alignItems: 'center',
+  },
+  registerFormContainer: { 
+    paddingHorizontal: moderateScale(20), 
+    paddingBottom: verticalScale(20), 
+    width: '100%', 
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  loginCard: { 
+    padding: moderateScale(25), 
+    borderRadius: moderateScale(15), 
+    marginBottom: verticalScale(20), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+    alignSelf: 'center',
+  },
+  formTitle: { 
+    fontSize: moderateScale(24), 
+    fontWeight: 'bold', 
+    marginBottom: verticalScale(5),
+  },
+  formSubtitle: { 
+    fontSize: moderateScale(14), 
+    marginBottom: verticalScale(20),
+  },
+  inputCont: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 1, 
+    borderRadius: moderateScale(10), 
+    paddingHorizontal: moderateScale(15), 
+    height: verticalScale(50), 
+    width: '100%',
+  },
+  inputIcon: { 
+    marginRight: moderateScale(10),
+  },
+  textInput: { 
+    flex: 1, 
+    height: '100%', 
+    fontSize: moderateScale(16),
+  },
+  gradBtn: { 
+    borderRadius: moderateScale(10), 
+    overflow: 'hidden', 
+    height: verticalScale(50), 
+    width: '100%',
+  },
+  gradBtnInner: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    width: '100%',
+  },
+  gradBtnTxt: { 
+    color: 'white', 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold',
+  },
+  disBtn: { 
+    opacity: 0.7,
+  },
+  linkButton: { 
+    alignSelf: 'center',
+  },
+  linkText: { 
+    fontSize: moderateScale(14),
+  },
+  linkTextBold: { 
+    fontWeight: 'bold',
+  },
   card: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+    marginBottom: moderateScale(16),
+    shadowOffset: { width: 0, height: moderateScale(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     elevation: 3,
     borderWidth: 1,
     width: '100%',
-    minWidth: 0,
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: moderateScale(16),
+    borderBottomWidth: 1,
+    width: '100%',
+    minHeight: verticalScale(60),
+  },
+  headerTitle: { 
+    fontSize: moderateScale(20), 
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: moderateScale(10),
+  },
+  filtersContainer: { 
+    width: '100%', 
+    padding: moderateScale(16), 
+    borderBottomWidth: 1,
+  },
+  filtersRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%',
+    flexWrap: isSmallScreen ? 'wrap' : 'nowrap',
+  },
+  pickerContainer: { 
+    width: isSmallScreen ? '100%' : '48%', 
+    borderRadius: moderateScale(8), 
+    borderWidth: 1,
+    marginBottom: isSmallScreen ? moderateScale(10) : 0,
+  },
+  pickerBtn: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: moderateScale(12), 
+    borderRadius: moderateScale(8),
+    minHeight: verticalScale(50),
+  },
+  pickerTxt: { 
+    fontSize: moderateScale(14),
+    flex: 1,
+    marginRight: moderateScale(10),
+  },
+  modalOverlay: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: { 
+    marginHorizontal: moderateScale(20), 
+    borderRadius: moderateScale(12), 
+    maxHeight: height * 0.6, 
+    width: moderateScale(335),
+    alignSelf: 'center',
+  },
+  modalTitle: { 
+    fontSize: moderateScale(18), 
+    fontWeight: 'bold', 
+    padding: moderateScale(16), 
+    borderBottomWidth: 1,
+  },
+  modalItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: moderateScale(16), 
+    borderBottomWidth: 1,
+    minHeight: verticalScale(50),
+  },
+  modalItemTxt: { 
+    fontSize: moderateScale(16),
+    flex: 1,
+  },
+  modalClose: { 
+    padding: moderateScale(16), 
+    borderRadius: moderateScale(8), 
+    margin: moderateScale(16), 
+    alignItems: 'center',
+  },
+  modalCloseTxt: { 
+    color: 'white', 
+    fontWeight: 'bold',
+    fontSize: moderateScale(16),
+  },
+  eventCard: { 
+    flexDirection: isSmallScreen ? 'column' : 'row', 
+    marginBottom: moderateScale(16),
+    width: '100%',
+    overflow: 'hidden',
+  },
+  eventImage: { 
+    width: isSmallScreen ? '100%' : moderateScale(100), 
+    height: isSmallScreen ? verticalScale(150) : moderateScale(100), 
+    borderRadius: moderateScale(8),
+  },
+  eventContent: { 
+    flex: 1, 
+    marginLeft: isSmallScreen ? 0 : moderateScale(12),
+    marginTop: isSmallScreen ? moderateScale(12) : 0,
+  },
+  eventHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start',
+    marginBottom: moderateScale(8),
+    flexWrap: 'wrap',
+  },
+  eventTitle: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    flex: 1,
+    marginRight: moderateScale(8),
+  },
+  categoryBadge: { 
+    paddingHorizontal: moderateScale(8), 
+    paddingVertical: moderateScale(4), 
+    borderRadius: moderateScale(4), 
+    alignSelf: 'flex-start',
+    marginTop: moderateScale(2),
+  },
+  categoryText: { 
+    color: 'white', 
+    fontSize: moderateScale(12), 
+    fontWeight: 'bold',
+  },
+  eventDetails: { 
+    marginBottom: moderateScale(8),
+  },
+  detailRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: moderateScale(4),
+    flexWrap: 'wrap',
+  },
+  eventTime: { 
+    fontSize: moderateScale(12), 
+    marginLeft: moderateScale(4),
+    flex: 1,
+  },
+  eventVenue: { 
+    fontSize: moderateScale(12), 
+    marginLeft: moderateScale(4),
+    flex: 1,
+  },
+  eventDescription: { 
+    fontSize: moderateScale(13), 
+    lineHeight: moderateScale(18),
+  },
+  eventsList: { 
+    padding: moderateScale(16), 
+    paddingBottom: verticalScale(30),
+    width: '100%',
+  },
+  eventsListContainer: {
+    width: '100%',
+    padding: moderateScale(16),
+    paddingBottom: verticalScale(30),
+  },
+  eventCardContainer: {
+    width: '100%',
+    marginBottom: moderateScale(16),
+  },
+  emptyState: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: moderateScale(40), 
+    width: '100%',
+    minHeight: verticalScale(300),
+  },
+  emptyStateTitle: { 
+    fontSize: moderateScale(18), 
+    fontWeight: 'bold', 
+    marginTop: verticalScale(16), 
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: { 
+    fontSize: moderateScale(14), 
+    marginTop: moderateScale(8), 
+    textAlign: 'center',
+  },
+  loadingContainer: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    width: '100%',
+    minHeight: verticalScale(200),
+  },
+  loadingText: { 
+    fontSize: moderateScale(16),
+  },
+  profileContainer: { 
+    padding: moderateScale(16), 
+    width: '100%',
+    alignItems: 'center',
+  },
+  profileCard: { 
+    marginBottom: moderateScale(16), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+  },
+  profileHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: verticalScale(20),
+    width: '100%',
+  },
+  profileAvatar: { 
+    width: moderateScale(80), 
+    height: moderateScale(80), 
+    borderRadius: moderateScale(40), 
+    marginRight: moderateScale(16),
+  },
+  profileInfo: { 
+    flex: 1,
+  },
+  profileName: { 
+    fontSize: moderateScale(20), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(4),
+  },
+  profileEmail: { 
+    fontSize: moderateScale(14),
+  },
+  profileDetails: { 
+    marginBottom: verticalScale(20),
+    width: '100%',
+  },
+  detailItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: verticalScale(12), 
     borderBottomWidth: 1,
     width: '100%',
   },
-  headerTitle: { fontSize: 20, fontWeight: 'bold' },
-  filtersContainer: { width: '100%', padding: 16, borderBottomWidth: 1 },
-  filtersRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-  pickerContainer: { width: '48%', borderRadius: 8, borderWidth: 1 },
-  pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8 },
-  pickerTxt: { fontSize: 14 },
-  modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalContent: { marginHorizontal: 20, borderRadius: 12, maxHeight: height * 0.6, width: '90%', alignSelf: 'center' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', padding: 16, borderBottomWidth: 1 },
-  modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
-  modalItemTxt: { fontSize: 16 },
-  modalClose: { padding: 16, borderRadius: 8, margin: 16, alignItems: 'center' },
-  modalCloseTxt: { color: 'white', fontWeight: 'bold' },
-  eventCard: { flexDirection: 'row', marginBottom: 16, minHeight: 110, width: '100%' },
-  eventImage: { width: 100, height: 100, borderRadius: 8 },
-  eventContent: { flex: 1, marginLeft: 12, minWidth: 0 },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  eventTitle: { fontSize: 16, fontWeight: 'bold', flex: 1, minWidth: 0 },
-  categoryBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginLeft: 8, alignSelf: 'flex-start' },
-  categoryText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  eventDetails: { marginBottom: 8 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  eventTime: { fontSize: 12, marginLeft: 4 },
-  eventVenue: { fontSize: 12, marginLeft: 4 },
-  eventDescription: { fontSize: 13, lineHeight: 18 },
-  eventsList: { padding: 16, paddingBottom: 30, flexGrow: 1, width: '100%' },
-  emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40, width: '100%' },
-  emptyStateTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 16, textAlign: 'center' },
-  emptyStateSubtitle: { fontSize: 14, marginTop: 8, textAlign: 'center' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' },
-  loadingText: { fontSize: 16 },
-  profileContainer: { padding: 16, width: '100%', flexGrow: 1 },
-  profileCard: { marginBottom: 16, width: '100%' },
-  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  profileAvatar: { width: 80, height: 80, borderRadius: 40, marginRight: 16 },
-  profileInfo: { flex: 1, minWidth: 0 },
-  profileName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  profileEmail: { fontSize: 14 },
-  profileDetails: { marginBottom: 20 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
-  detailLabel: { fontSize: 14, marginLeft: 12, marginRight: 8 },
-  detailValue: { fontSize: 14, fontWeight: 'bold', flex: 1, textAlign: 'right' },
-  profileActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-  profileActionBtn: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, width: '48%' },
-  profileActionText: { fontSize: 14, fontWeight: 'bold', marginLeft: 8 },
-  statsCard: { padding: 16, width: '100%' },
-  statsTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%' },
-  statItem: { width: '48%', borderRadius: 8, padding: 16, marginBottom: 16, alignItems: 'center' },
-  statValue: { fontSize: 24, fontWeight: 'bold', marginVertical: 8 },
-  statLabel: { fontSize: 12 },
-  notificationCard: { padding: 16, marginBottom: 12, width: '100%' },
-  notificationHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  notificationTitle: { fontSize: 16, fontWeight: 'bold', flex: 1 },
-  notificationTime: { fontSize: 12 },
-  notificationMessage: { fontSize: 14, lineHeight: 20 },
-  notificationsList: { padding: 16, width: '100%' },
-  detailsEventImage: { width: '100%', height: 200 },
-  detailsContent: { padding: 16, width: '100%' },
-  detailsCard: { marginBottom: 16, width: '100%' },
-  detailsTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 16 },
-  detailsInfo: { marginBottom: 16 },
-  detailsInfoItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  detailsInfoText: { fontSize: 14, marginLeft: 8 },
-  detailsDescription: { fontSize: 14, lineHeight: 22, marginBottom: 16 },
-  speakersSection: { marginTop: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  speakerItem: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1 },
-  speakerAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
-  speakerInfo: { flex: 1, justifyContent: 'center' },
-  speakerName: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  speakerBio: { fontSize: 12 },
-  actionButtons: { marginBottom: 20, width: '100%' },
-  qrCodeContainer: { alignItems: 'center', marginTop: 20, width: '100%' },
-  qrCodeTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
-  qrCodeCard: { padding: 20, borderRadius: 12, alignItems: 'center', width: 240, alignSelf: 'center' },
-  qrCodeText: { fontSize: 16, fontWeight: 'bold', marginTop: 12 },
-  qrCodeSubtext: { fontSize: 12, marginTop: 4 },
-  feedbackContainer: { padding: 16, width: '100%', flexGrow: 1 },
-  feedbackCard: { padding: 20, width: '100%' },
-  feedbackTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  ratingContainer: { alignItems: 'center', marginBottom: 20, width: '100%' },
-  ratingText: { fontSize: 14, marginTop: 8 },
-  feedbackLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  feedbackInput: { height: 120, borderWidth: 1, borderRadius: 8, padding: 12, textAlignVertical: 'top', width: '100%' },
-  settingsContainer: { padding: 16, width: '100%', flexGrow: 1 },
-  settingsCard: { marginBottom: 16, width: '100%' },
-  settingsSectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
-  settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, width: '100%' },
-  settingText: { flexDirection: 'row', alignItems: 'center' },
-  settingLabel: { fontSize: 16, marginLeft: 12 },
-  settingValue: { fontSize: 14 },
+  detailLabel: { 
+    fontSize: moderateScale(14), 
+    marginLeft: moderateScale(12), 
+    marginRight: moderateScale(8),
+    flex: 1,
+  },
+  detailValue: { 
+    fontSize: moderateScale(14), 
+    fontWeight: 'bold', 
+    flex: 2,
+    textAlign: 'right',
+  },
+  profileActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%',
+    flexWrap: isSmallScreen ? 'wrap' : 'nowrap',
+  },
+  profileActionBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: moderateScale(12), 
+    borderRadius: moderateScale(8), 
+    width: isSmallScreen ? '100%' : '48%',
+    marginBottom: isSmallScreen ? moderateScale(10) : 0,
+    justifyContent: 'center',
+  },
+  profileActionText: { 
+    fontSize: moderateScale(14), 
+    fontWeight: 'bold', 
+    marginLeft: moderateScale(8),
+  },
+  statsCard: { 
+    padding: moderateScale(16), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+  },
+  statsTitle: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(16),
+  },
+  statsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between', 
+    width: '100%',
+  },
+  statItem: { 
+    width: isSmallScreen ? '48%' : '23%', 
+    borderRadius: moderateScale(8), 
+    padding: moderateScale(16), 
+    marginBottom: moderateScale(16), 
+    alignItems: 'center',
+    minWidth: moderateScale(80),
+  },
+  statValue: { 
+    fontSize: moderateScale(24), 
+    fontWeight: 'bold', 
+    marginVertical: verticalScale(8),
+  },
+  statLabel: { 
+    fontSize: moderateScale(12),
+    textAlign: 'center',
+  },
+  notificationCard: { 
+    padding: moderateScale(16), 
+    marginBottom: moderateScale(12), 
+    width: '100%',
+  },
+  notificationHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start',
+    marginBottom: moderateScale(8),
+    flexWrap: 'wrap',
+  },
+  notificationTitle: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    flex: 1,
+    marginRight: moderateScale(8),
+  },
+  notificationTime: { 
+    fontSize: moderateScale(12),
+  },
+  notificationMessage: { 
+    fontSize: moderateScale(14), 
+    lineHeight: moderateScale(20),
+  },
+  notificationsList: { 
+    padding: moderateScale(16), 
+    width: '100%',
+  },
+  detailsEventImage: { 
+    width: '100%',
+  },
+  detailsContent: { 
+    padding: moderateScale(16), 
+    width: '100%',
+    alignItems: 'center',
+  },
+  detailsCard: { 
+    marginBottom: moderateScale(16), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+  },
+  detailsTitle: { 
+    fontSize: moderateScale(22), 
+    fontWeight: 'bold', 
+    marginBottom: verticalScale(16),
+  },
+  detailsInfo: { 
+    marginBottom: verticalScale(16),
+    width: '100%',
+  },
+  detailsInfoItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: moderateScale(8),
+    flexWrap: 'wrap',
+  },
+  detailsInfoText: { 
+    fontSize: moderateScale(14), 
+    marginLeft: moderateScale(8),
+    flex: 1,
+  },
+  detailsDescription: { 
+    fontSize: moderateScale(14), 
+    lineHeight: moderateScale(22), 
+    marginBottom: verticalScale(16),
+  },
+  speakersSection: { 
+    marginTop: verticalScale(16),
+    width: '100%',
+  },
+  sectionTitle: { 
+    fontSize: moderateScale(18), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(12),
+  },
+  speakerItem: { 
+    flexDirection: 'row', 
+    paddingVertical: verticalScale(12), 
+    borderBottomWidth: 1,
+    width: '100%',
+  },
+  speakerAvatar: { 
+    width: moderateScale(50), 
+    height: moderateScale(50), 
+    borderRadius: moderateScale(25), 
+    marginRight: moderateScale(12),
+  },
+  speakerInfo: { 
+    flex: 1, 
+    justifyContent: 'center',
+  },
+  speakerName: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(4),
+  },
+  speakerBio: { 
+    fontSize: moderateScale(12),
+  },
+  actionButtons: { 
+    marginBottom: verticalScale(20), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+    alignItems: 'center',
+  },
+  qrCodeContainer: { 
+    alignItems: 'center', 
+    marginTop: verticalScale(20), 
+    width: '100%',
+  },
+  qrCodeTitle: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(12),
+  },
+  qrCodeCard: { 
+    padding: moderateScale(20), 
+    borderRadius: moderateScale(12), 
+    alignItems: 'center', 
+    width: '100%',
+    maxWidth: moderateScale(300),
+  },
+  qrCodeText: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginTop: moderateScale(12),
+    textAlign: 'center',
+  },
+  qrCodeSubtext: { 
+    fontSize: moderateScale(12), 
+    marginTop: moderateScale(4),
+    textAlign: 'center',
+  },
+  feedbackContainer: { 
+    padding: moderateScale(16), 
+    width: '100%',
+    alignItems: 'center',
+    flexGrow: 1,
+  },
+  feedbackCard: { 
+    padding: moderateScale(20), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+  },
+  feedbackTitle: { 
+    fontSize: moderateScale(20), 
+    fontWeight: 'bold', 
+    marginBottom: verticalScale(20), 
+    textAlign: 'center',
+  },
+  ratingContainer: { 
+    alignItems: 'center', 
+    marginBottom: verticalScale(20), 
+    width: '100%',
+  },
+  ratingText: { 
+    fontSize: moderateScale(14), 
+    marginTop: moderateScale(8),
+  },
+  feedbackLabel: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(8),
+  },
+  feedbackInput: { 
+    height: verticalScale(120), 
+    borderWidth: 1, 
+    borderRadius: moderateScale(8), 
+    padding: moderateScale(12), 
+    textAlignVertical: 'top', 
+    width: '100%',
+    fontSize: moderateScale(16),
+  },
+  settingsContainer: { 
+    padding: moderateScale(16), 
+    width: '100%',
+    alignItems: 'center',
+    paddingBottom: verticalScale(30),
+  },
+  settingsCard: { 
+    marginBottom: moderateScale(16), 
+    width: '100%',
+    maxWidth: moderateScale(400),
+  },
+  settingsSectionTitle: { 
+    fontSize: moderateScale(16), 
+    fontWeight: 'bold', 
+    marginBottom: moderateScale(16),
+  },
+  settingItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingVertical: verticalScale(12), 
+    borderBottomWidth: 1, 
+    width: '100%',
+    minHeight: verticalScale(50),
+  },
+  settingText: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingLabel: { 
+    fontSize: moderateScale(16), 
+    marginLeft: moderateScale(12),
+    flex: 1,
+  },
+  settingValue: { 
+    fontSize: moderateScale(14),
+  },
   avatarContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: verticalScale(20),
     width: '100%',
   },
   uploadButton: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 5,
+    marginTop: verticalScale(10),
+    padding: moderateScale(10),
+    borderRadius: moderateScale(5),
     alignItems: 'center',
-    width: 120,
+    width: moderateScale(150),
   },
   uploadButtonText: {
     color: 'white',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    fontSize: moderateScale(14),
   },
   recommendationBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    flexWrap: 'wrap',
+    marginBottom: verticalScale(10),
     width: '100%',
+    flexWrap: 'wrap',
   },
   recommendationBarTitle: {
     fontWeight: 'bold',
-    fontSize: 13,
-    marginRight: 5
+    fontSize: moderateScale(13),
+    marginRight: moderateScale(5),
+    marginBottom: moderateScale(5),
+  },
+  recommendationScroll: {
+    flex: 1,
+  },
+  recommendationButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   recommendationBtn: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 6,
-    marginBottom: 6,
+    borderRadius: moderateScale(16),
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(6),
+    marginRight: moderateScale(6),
+    marginBottom: moderateScale(6),
   },
   recommendationBtnText: {
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: moderateScale(12),
   },
   recommendationSection: {
-    marginBottom: 10,
+    marginBottom: verticalScale(10),
     width: '100%',
   },
   recommendationSectionTitle: {
     fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: moderateScale(16),
+    marginBottom: moderateScale(8),
+  },
+  recommendationScrollView: {
+    marginBottom: moderateScale(8),
+  },
+  recommendationCardContainer: {
+    marginRight: moderateScale(12),
   },
   recommendationCard: {
-    width: 170,
+    width: moderateScale(170),
     padding: 0,
-    marginRight: 12,
-    borderRadius: 12,
+    borderRadius: moderateScale(12),
     overflow: 'hidden',
-    backgroundColor: '#fff',
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    minHeight: moderateScale(150),
   },
   recommendationImage: {
-    width: 170,
-    height: 90,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    width: '100%',
+    height: moderateScale(90),
   },
   recommendationCardContent: {
-    padding: 10,
+    padding: moderateScale(10),
   },
   recommendationCardTitle: {
     fontWeight: 'bold',
-    fontSize: 14,
-    marginBottom: 2,
+    fontSize: moderateScale(14),
+    marginBottom: moderateScale(2),
   },
   recommendationCardVenue: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 2,
+    fontSize: moderateScale(12),
+    marginBottom: moderateScale(2),
   },
   recommendationCardDate: {
-    color: '#aaa',
-    fontSize: 12,
+    fontSize: moderateScale(12),
+  },
+  scrollContent: {
+    flexGrow: 1,
+    width: '100%',
+  },
+  detailsScrollContent: {
+    flexGrow: 1,
+    width: '100%',
+    paddingBottom: verticalScale(30),
+  },
+  editProfileContainer: {
+    flexGrow: 1,
+    width: '100%',
+    alignItems: 'center',
+  },
+  profileEditContainer: {
+    width: '100%',
+    padding: moderateScale(16),
+    alignItems: 'center',
   },
 });
 
